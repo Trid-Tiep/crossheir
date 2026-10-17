@@ -13,15 +13,31 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.prefs.Preferences;
 
 public class ConfigWindow extends JFrame {
     private static final String TRAY_ICON_PATH = "/tray_icon.png";
+
+    private static final Preferences PREFS = Preferences.userNodeForPackage(ConfigWindow.class);
+    private static final String PREF_IMAGE_PATH = "lastImagePath";
+    private static final String PREF_WIDTH = "lastWidth";
+    private static final String PREF_HEIGHT = "lastHeight";
+    private static final String PREF_OFFSET_X = "lastOffsetX";
+    private static final String PREF_OFFSET_Y = "lastOffsetY";
+    private static final String PREF_OPACITY = "lastOpacity";
 
     private File selectedImageFile;
     private OverlayWindow currentOverlay;
     private TrayIcon trayIcon;
 
     public ConfigWindow() {
+        String initialImagePath = PREFS.get(PREF_IMAGE_PATH, "");
+        int initialWidth = clamp(PREFS.getInt(PREF_WIDTH, 100), 10, 1920);
+        int initialHeight = clamp(PREFS.getInt(PREF_HEIGHT, 100), 10, 1080);
+        int initialOffsetX = clamp(PREFS.getInt(PREF_OFFSET_X, 0), -500, 500);
+        int initialOffsetY = clamp(PREFS.getInt(PREF_OFFSET_Y, 0), -500, 500);
+        int initialOpacity = clamp(PREFS.getInt(PREF_OPACITY, 100), 10, 100);
+
         setTitle("Crosshair Overlay - Config");
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         setLayout(new GridBagLayout());
@@ -34,6 +50,14 @@ public class ConfigWindow extends JFrame {
         JTextField pathField = new JTextField();
         pathField.setColumns(30);
         pathField.setToolTipText("Enter a full file path or browse");
+        // Pre-fill from previous run
+        if (!initialImagePath.isEmpty()) {
+            pathField.setText(initialImagePath);
+            File f = new File(initialImagePath);
+            if (f.exists() && f.isFile()) {
+                selectedImageFile = f;
+            }
+        }
         JButton browseBtn = new JButton("Browse...");
 
         gbc.gridx = 0; gbc.gridy = 0;
@@ -49,25 +73,25 @@ public class ConfigWindow extends JFrame {
         gbc.gridx = 0; gbc.gridy = 1;
         gbc.gridwidth = 1;
         add(new JLabel("Width (px):"), gbc);
-        JSpinner widthSpinner = new JSpinner(new SpinnerNumberModel(100, 10, 1920, 1));
+        JSpinner widthSpinner = new JSpinner(new SpinnerNumberModel(initialWidth, 10, 1920, 1));
         gbc.gridx = 1;
         add(widthSpinner, gbc);
 
         gbc.gridx = 2;
         add(new JLabel("X Offset:"), gbc);
-        JSpinner xOffsetSpinner = new JSpinner(new SpinnerNumberModel(0, -500, 500, 1));
+        JSpinner xOffsetSpinner = new JSpinner(new SpinnerNumberModel(initialOffsetX, -500, 500, 1));
         gbc.gridx = 3;
         add(xOffsetSpinner, gbc);
 
         gbc.gridx = 0; gbc.gridy = 2;
         add(new JLabel("Height (px):"), gbc);
-        JSpinner heightSpinner = new JSpinner(new SpinnerNumberModel(100, 10, 1080, 1));
+        JSpinner heightSpinner = new JSpinner(new SpinnerNumberModel(initialHeight, 10, 1080, 1));
         gbc.gridx = 1;
         add(heightSpinner, gbc);
 
         gbc.gridx = 2;
         add(new JLabel("Y Offset:"), gbc);
-        JSpinner yOffsetSpinner = new JSpinner(new SpinnerNumberModel(0, -500, 500, 1));
+        JSpinner yOffsetSpinner = new JSpinner(new SpinnerNumberModel(initialOffsetY, -500, 500, 1));
         gbc.gridx = 3;
         add(yOffsetSpinner, gbc);
 
@@ -75,7 +99,7 @@ public class ConfigWindow extends JFrame {
         gbc.gridwidth = 1;
         add(new JLabel("Opacity:"), gbc);
 
-        JSlider opacitySlider = new JSlider(10, 100, 100);
+        JSlider opacitySlider = new JSlider(10, 100, initialOpacity);
         opacitySlider.setMajorTickSpacing(10);
         opacitySlider.setPaintTicks(true);
         opacitySlider.setPaintLabels(true);
@@ -84,7 +108,7 @@ public class ConfigWindow extends JFrame {
         gbc.gridwidth = 2;
         add(opacitySlider, gbc);
 
-        JLabel opacityLabel = new JLabel("100%");
+        JLabel opacityLabel = new JLabel(initialOpacity + "%");
         gbc.gridx = 3;
         gbc.gridwidth = 1;
         add(opacityLabel, gbc);
@@ -95,7 +119,7 @@ public class ConfigWindow extends JFrame {
         });
 
         JButton saveBtn = new JButton("Apply Overlay");
-        gbc.gridx = 0; gbc.gridy = 5;
+        gbc.gridx = 0; gbc.gridy = 4;
         gbc.gridwidth = 4;
         gbc.anchor = GridBagConstraints.CENTER;
         add(saveBtn, gbc);
@@ -117,7 +141,7 @@ public class ConfigWindow extends JFrame {
             }
 
             if (startDir == null) {
-                startDir = new File("D:\\Pics");
+                startDir = new File(System.getProperty("user.home"), "Pictures");
                 if (!startDir.exists() || !startDir.isDirectory()) {
                     startDir = new File(System.getProperty("user.home"));
                 }
@@ -136,9 +160,9 @@ public class ConfigWindow extends JFrame {
 
         saveBtn.addActionListener(e -> {
             String path = pathField.getText().trim();
-            File fileToUse = selectedImageFile;
+            File fileToUse = null;
 
-            if (fileToUse == null && !path.isEmpty()) {
+            if (!path.isEmpty()) {
                 File f = new File(path);
                 if (f.exists() && f.isFile()) {
                     fileToUse = f;
@@ -149,6 +173,8 @@ public class ConfigWindow extends JFrame {
                             JOptionPane.ERROR_MESSAGE);
                     return;
                 }
+            } else if (selectedImageFile != null && selectedImageFile.exists()) {
+                fileToUse = selectedImageFile;
             }
 
             if (fileToUse == null) {
@@ -187,6 +213,8 @@ public class ConfigWindow extends JFrame {
                 currentOverlay = new OverlayWindow(settings, img);
                 currentOverlay.setVisible(true);
 
+                saveSettings(settings);
+
                 JOptionPane.showMessageDialog(this,
                         "Overlay applied! It will stay on top of games.\n" +
                                 "You can now close this window (keep overlay) or exit the app.",
@@ -201,6 +229,7 @@ public class ConfigWindow extends JFrame {
             }
         });
 
+        // --- Window closing handler ---
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
@@ -211,6 +240,24 @@ public class ConfigWindow extends JFrame {
         pack();
         setLocationRelativeTo(null);
         setVisible(true);
+    }
+
+    private void saveSettings(CrosshairSettings settings) {
+        PREFS.put(PREF_IMAGE_PATH, settings.getImagePath());
+        PREFS.putInt(PREF_WIDTH, settings.getWidth());
+        PREFS.putInt(PREF_HEIGHT, settings.getHeight());
+        PREFS.putInt(PREF_OFFSET_X, settings.getOffsetX());
+        PREFS.putInt(PREF_OFFSET_Y, settings.getOffsetY());
+        PREFS.putInt(PREF_OPACITY, Math.round(settings.getOpacity() * 100));
+        try {
+            PREFS.flush();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+    }
+
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     private void handleClose() {
